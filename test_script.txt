@@ -1,0 +1,4 @@
+ls
+cd /home/user
+conf-dump
+echo "Test zavershen"

@@ -1,0 +1,3 @@
+ls
+invalid_command
+cd /home
