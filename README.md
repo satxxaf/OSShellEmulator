@@ -28,7 +28,7 @@ cd.
 ### Результат 1 этапа
 <img width="563" height="280" alt="image" src="https://github.com/user-attachments/assets/95d9cb8f-fdec-468a-8cd5-9885e89bb2cb" />
 
-### Код 1 этапа hеализованного на языке С++
+### Код 1 этапа реализованного на языке С++
 ```
 #include <iostream>
 #include <string>
