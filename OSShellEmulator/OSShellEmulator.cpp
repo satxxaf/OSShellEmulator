@@ -7,12 +7,174 @@
 
 using namespace std;
 
+//структура для узла VFS (файл или папка)
+struct VFSNode {
+    string name;
+    bool is_directory;
+    string content; // содержимое файла
+    map<string, VFSNode*> children; // дочерние узлы
+
+    VFSNode(const string& n, bool is_dir = false) : name(n), is_directory(is_dir) {}
+};
+
+//класс для виртуальной файловой системы
+class VirtualFS {
+private:
+    VFSNode* root;
+    VFSNode* current_dir;
+
+public:
+    VirtualFS() {
+        root = new VFSNode("", true);
+        current_dir = root;
+    }
+
+    //загрузка VFS (пока заглушка - создаем тестовую структуру)
+    bool loadFromZip(const string& zip_path) {
+        cout << "Загрузка VFS из: " << zip_path << endl;
+
+        //создаем тестовую структуру файлов
+        addFile("/motd", "Добро пожаловать в эмулятор командной оболочки!\nVFS успешно загружена.");
+        addFile("/readme.txt", "Это тестовая виртуальная файловая система");
+        addDirectory("/home");
+        addDirectory("/home/user");
+        addFile("/home/user/document.txt", "Содержимое документа пользователя");
+        addDirectory("/etc");
+        addFile("/etc/config.txt", "config_value=123");
+        addDirectory("/var");
+        addDirectory("/var/log");
+        addFile("/var/log/system.log", "Логи системы...");
+
+        return true;
+    }
+
+    //добавление файла
+    void addFile(const string& path, const string& content) {
+        vector<string> parts = splitPath(path);
+        VFSNode* node = root;
+
+        for (size_t i = 0; i < parts.size() - 1; i++) {
+            if (node->children.find(parts[i]) == node->children.end()) {
+                node->children[parts[i]] = new VFSNode(parts[i], true);
+            }
+            node = node->children[parts[i]];
+        }
+
+        node->children[parts.back()] = new VFSNode(parts.back(), false);
+        node->children[parts.back()]->content = content;
+    }
+
+    //добавление директории
+    void addDirectory(const string& path) {
+        vector<string> parts = splitPath(path);
+        VFSNode* node = root;
+
+        for (const string& part : parts) {
+            if (node->children.find(part) == node->children.end()) {
+                node->children[part] = new VFSNode(part, true);
+            }
+            node = node->children[part];
+        }
+    }
+
+    //разбиение пути на части
+    vector<string> splitPath(const string& path) {
+        vector<string> parts;
+        stringstream ss(path);
+        string part;
+
+        while (getline(ss, part, '/')) {
+            if (!part.empty()) {
+                parts.push_back(part);
+            }
+        }
+
+        return parts;
+    }
+
+    //получение содержимого текущей директории
+    vector<string> listCurrentDir() {
+        vector<string> result;
+        for (const auto& entry : current_dir->children) {
+            result.push_back(entry.first + (entry.second->is_directory ? "/" : ""));
+        }
+        return result;
+    }
+
+    //смена директории
+    bool changeDir(const string& path) {
+        if (path == "/") {
+            current_dir = root;
+            return true;
+        }
+
+        vector<string> parts = splitPath(path);
+        VFSNode* node = current_dir;
+
+        //обработка абсолютных путей
+        if (path[0] == '/') {
+            node = root;
+        }
+
+        for (const string& part : parts) {
+            if (part == "..") {
+                if (node != root) {
+                    //упрощенная реализация - возврат к корню
+                    node = root;
+                }
+            }
+            else if (node->children.find(part) == node->children.end() ||
+                !node->children[part]->is_directory) {
+                return false;
+            }
+            else {
+                node = node->children[part];
+            }
+        }
+
+        current_dir = node;
+        return true;
+    }
+
+    //чтение файла
+    string readFile(const string& path) {
+        vector<string> parts = splitPath(path);
+        VFSNode* node = current_dir;
+
+        //обработка абсолютных путей
+        if (path[0] == '/') {
+            node = root;
+        }
+
+        for (size_t i = 0; i < parts.size(); i++) {
+            if (node->children.find(parts[i]) == node->children.end()) {
+                return "";
+            }
+            node = node->children[parts[i]];
+        }
+
+        return node->is_directory ? "" : node->content;
+    }
+
+    //получение motd
+    string getMotd() {
+        return readFile("/motd");
+    }
+
+    //получение текущего пути
+    string getCurrentPath() {
+        //упрощенная реализация
+        return current_dir == root ? "/" : "/current";
+    }
+};
+
 class Shell {
 private:
     string vfs_name;
     bool running;
-    string vfs_path;    // новый параметр
-    string script_path; // новый параметр
+    string vfs_path;    //новый параметр
+    string script_path; //новый параметр
+    VirtualFS vfs;      //НОВЫЙ ОБЪЕКТ VFS
 
     //парсер команд с поддержкой кавычек
     vector<string> parseCommand(const string& input) {
@@ -89,18 +251,63 @@ private:
                     return false;
                 }
                 else if (command == "ls") {
-                    cout << "Команда 'ls' (заглушка) с аргументами: ";
-                    for (size_t i = 1; i < args.size(); i++) {
-                        cout << "[" << args[i] << "] ";
+                    if (!vfs_path.empty()) {
+                        //реальная реализация ls для VFS
+                        auto files = vfs.listCurrentDir();
+                        if (files.empty()) {
+                            cout << "Директория пуста" << endl;
+                        }
+                        else {
+                            cout << "Содержимое директории:" << endl;
+                            for (const auto& file : files) {
+                                cout << "  " << file << endl;
+                            }
+                        }
                     }
-                    cout << endl;
+                    else {
+                        //старая заглушка
+                        cout << "Команда 'ls' (заглушка) с аргументами: ";
+                        for (size_t i = 1; i < args.size(); i++) {
+                            cout << "[" << args[i] << "] ";
+                        }
+                        cout << endl;
+                    }
                 }
                 else if (command == "cd") {
-                    cout << "Команда 'cd' (заглушка) с аргументами: ";
-                    for (size_t i = 1; i < args.size(); i++) {
-                        cout << "[" << args[i] << "] ";
+                    if (!vfs_path.empty() && args.size() > 1) {
+                        if (vfs.changeDir(args[1])) {
+                            cout << "Переход в: " << args[1] << endl;
+                        }
+                        else {
+                            cout << "Ошибка: директория не найдена" << endl;
+                        }
                     }
-                    cout << endl;
+                    else {
+                        //старая заглушка
+                        cout << "Команда 'cd' (заглушка) с аргументами: ";
+                        for (size_t i = 1; i < args.size(); i++) {
+                            cout << "[" << args[i] << "] ";
+                        }
+                        cout << endl;
+                    }
+                }
+                else if (command == "cat") {
+                    if (!vfs_path.empty() && args.size() > 1) {
+                        string content = vfs.readFile(args[1]);
+                        if (!content.empty()) {
+                            cout << content << endl;
+                        }
+                        else {
+                            cout << "Ошибка: файл не найден или недоступен" << endl;
+                        }
+                    }
+                    else {
+                        cout << "Команда 'cat' (заглушка) с аргументами: ";
+                        for (size_t i = 1; i < args.size(); i++) {
+                            cout << "[" << args[i] << "] ";
+                        }
+                        cout << endl;
+                    }
                 }
                 else if (command == "conf-dump") {
                     showConfig();
@@ -126,18 +333,63 @@ private:
             cout << "Выход из эмулятора..." << endl;
         }
         else if (command == "ls") {
-            cout << "Команда 'ls' (заглушка) с аргументами: ";
-            for (size_t i = 1; i < args.size(); i++) {
-                cout << "[" << args[i] << "] ";
+            if (!vfs_path.empty()) {
+                //реальная реализация ls для VFS
+                auto files = vfs.listCurrentDir();
+                if (files.empty()) {
+                    cout << "Директория пуста" << endl;
+                }
+                else {
+                    cout << "Содержимое директории:" << endl;
+                    for (const auto& file : files) {
+                        cout << "  " << file << endl;
+                    }
+                }
             }
-            cout << endl;
+            else {
+                //старая заглушка
+                cout << "Команда 'ls' (заглушка) с аргументами: ";
+                for (size_t i = 1; i < args.size(); i++) {
+                    cout << "[" << args[i] << "] ";
+                }
+                cout << endl;
+            }
         }
         else if (command == "cd") {
-            cout << "Команда 'cd' (заглушка) с аргументами: ";
-            for (size_t i = 1; i < args.size(); i++) {
-                cout << "[" << args[i] << "] ";
+            if (!vfs_path.empty() && args.size() > 1) {
+                if (vfs.changeDir(args[1])) {
+                    cout << "Переход в: " << args[1] << endl;
+                }
+                else {
+                    cout << "Ошибка: директория не найдена" << endl;
+                }
             }
-            cout << endl;
+            else {
+                //старая заглушка
+                cout << "Команда 'cd' (заглушка) с аргументами: ";
+                for (size_t i = 1; i < args.size(); i++) {
+                    cout << "[" << args[i] << "] ";
+                }
+                cout << endl;
+            }
+        }
+        else if (command == "cat") {
+            if (!vfs_path.empty() && args.size() > 1) {
+                string content = vfs.readFile(args[1]);
+                if (!content.empty()) {
+                    cout << content << endl;
+                }
+                else {
+                    cout << "Ошибка: файл не найден или недоступен" << endl;
+                }
+            }
+            else {
+                cout << "Команда 'cat' (заглушка) с аргументами: ";
+                for (size_t i = 1; i < args.size(); i++) {
+                    cout << "[" << args[i] << "] ";
+                }
+                cout << endl;
+            }
         }
         //НОВ.КОМ: вывод конфигурации
         else if (command == "conf-dump") {
@@ -155,6 +407,21 @@ public:
     }
 
     void run() {
+        //загрузка VFS если указан путь
+        if (!vfs_path.empty()) {
+            if (!vfs.loadFromZip(vfs_path)) {
+                cout << "Ошибка загрузки VFS!" << endl;
+                return;
+            }
+
+            // Вывод motd если есть
+            string motd = vfs.getMotd();
+            if (!motd.empty()) {
+                cout << "MOTD" << endl;
+                cout << motd << endl;
+            }
+        }
+
         //НОВ.К: отладочный вывод параметров при запуске
         cout << "Отладочный вывод параметров" << endl;
         cout << "vfs_path: " << (vfs_path.empty() ? "не указан" : vfs_path) << endl;
@@ -170,6 +437,7 @@ public:
         cout << "Эмулятор командной оболочки ОС" << endl;
         cout << "VFS: " << vfs_name << endl;
         cout << "Введите 'exit' для выхода, 'conf-dump' для просмотра конфигурации" << endl << endl;
+        cout << "Доступные команды: ls, cd, cat, conf-dump, exit" << endl << endl;
 
         while (running) {
             //приглашение к вводу

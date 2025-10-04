@@ -1,0 +1,11 @@
+conf-dump
+ls
+cd /home
+ls
+cd user
+ls
+cat document.txt
+cat /motd
+cd /
+ls
+cat /etc/config.txt
