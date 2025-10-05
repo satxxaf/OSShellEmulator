@@ -12,9 +12,10 @@ struct VFSNode {
     string name;
     bool is_directory;
     string content; // содержимое файла
+    string permissions; // НОВОЕ: права доступа
     map<string, VFSNode*> children; // дочерние узлы
 
-    VFSNode(const string& n, bool is_dir = false) : name(n), is_directory(is_dir) {}
+    VFSNode(const string& n, bool is_dir = false) : name(n), is_directory(is_dir), permissions("rw-r--r--") {}
 };
 
 //класс для виртуальной файловой системы
@@ -93,11 +94,14 @@ public:
         return parts;
     }
 
-    //получение содержимого текущей директории
+    //получение содержимого текущей директории (ОБНОВЛЕНО: с правами доступа)
     vector<string> listCurrentDir() {
         vector<string> result;
         for (const auto& entry : current_dir->children) {
-            result.push_back(entry.first + (entry.second->is_directory ? "/" : ""));
+            string perms = entry.second->permissions;
+            string type = entry.second->is_directory ? "d" : "-";
+            result.push_back(type + perms + " " + entry.first +
+                (entry.second->is_directory ? "/" : ""));
         }
         return result;
     }
@@ -205,6 +209,55 @@ public:
         int size = calculateSize(target_node);
         string name = target_node == root ? "/" : target_node->name;
         cout << size << "\t" << name << (target_node->is_directory ? "/" : "") << endl;
+    }
+
+    //НОВАЯ ФУНКЦИЯ: команда chmod - изменение прав доступа
+    bool changePermissions(const string& path, const string& mode) {
+        vector<string> parts = splitPath(path);
+        VFSNode* node = current_dir;
+
+        if (path[0] == '/') {
+            node = root;
+        }
+
+        for (const string& part : parts) {
+            if (node->children.find(part) == node->children.end()) {
+                return false;
+            }
+            node = node->children[part];
+        }
+
+        // Упрощенная реализация - просто сохраняем переданный режим
+        node->permissions = mode;
+        cout << "Права доступа изменены: " << path << " -> " << mode << endl;
+        return true;
+    }
+
+    //НОВАЯ ФУНКЦИЯ: команда touch - создание файла
+    bool createFile(const string& path) {
+        vector<string> parts = splitPath(path);
+        VFSNode* node = root;
+
+        for (size_t i = 0; i < parts.size() - 1; i++) {
+            if (node->children.find(parts[i]) == node->children.end()) {
+                // Создаем промежуточные директории
+                node->children[parts[i]] = new VFSNode(parts[i], true);
+            }
+            node = node->children[parts[i]];
+        }
+
+        // Создаем файл
+        string filename = parts.back();
+        if (node->children.find(filename) == node->children.end()) {
+            node->children[filename] = new VFSNode(filename, false);
+            node->children[filename]->content = ""; // Пустой файл
+            cout << "Создан файл: " << path << endl;
+            return true;
+        }
+        else {
+            cout << "Файл уже существует: " << path << endl;
+            return false;
+        }
     }
 };
 
@@ -367,6 +420,37 @@ private:
                         cout << endl;
                     }
                 }
+                //НОВАЯ КОМАНДА: chmod
+                else if (command == "chmod") {
+                    if (!vfs_path.empty() && args.size() > 2) {
+                        if (vfs.changePermissions(args[2], args[1])) {
+                            // Успех
+                        }
+                        else {
+                            cout << "Ошибка: файл не найден" << endl;
+                        }
+                    }
+                    else {
+                        cout << "Команда 'chmod' (заглушка) с аргументами: ";
+                        for (size_t i = 1; i < args.size(); i++) {
+                            cout << "[" << args[i] << "] ";
+                        }
+                        cout << endl;
+                    }
+                }
+                //НОВАЯ КОМАНДА: touch
+                else if (command == "touch") {
+                    if (!vfs_path.empty() && args.size() > 1) {
+                        vfs.createFile(args[1]);
+                    }
+                    else {
+                        cout << "Команда 'touch' (заглушка) с аргументами: ";
+                        for (size_t i = 1; i < args.size(); i++) {
+                            cout << "[" << args[i] << "] ";
+                        }
+                        cout << endl;
+                    }
+                }
                 else if (command == "conf-dump") {
                     showConfig();
                 }
@@ -467,6 +551,37 @@ private:
                 cout << endl;
             }
         }
+        //НОВАЯ КОМАНДА: chmod
+        else if (command == "chmod") {
+            if (!vfs_path.empty() && args.size() > 2) {
+                if (vfs.changePermissions(args[2], args[1])) {
+                    // Успех
+                }
+                else {
+                    cout << "Ошибка: файл не найден" << endl;
+                }
+            }
+            else {
+                cout << "Команда 'chmod' (заглушка) с аргументами: ";
+                for (size_t i = 1; i < args.size(); i++) {
+                    cout << "[" << args[i] << "] ";
+                }
+                cout << endl;
+            }
+        }
+        //НОВАЯ КОМАНДА: touch
+        else if (command == "touch") {
+            if (!vfs_path.empty() && args.size() > 1) {
+                vfs.createFile(args[1]);
+            }
+            else {
+                cout << "Команда 'touch' (заглушка) с аргументами: ";
+                for (size_t i = 1; i < args.size(); i++) {
+                    cout << "[" << args[i] << "] ";
+                }
+                cout << endl;
+            }
+        }
         //НОВ.КОМ: вывод конфигурации
         else if (command == "conf-dump") {
             showConfig();
@@ -513,7 +628,7 @@ public:
         cout << "Эмулятор командной оболочки ОС" << endl;
         cout << "VFS: " << vfs_name << endl;
         cout << "Введите 'exit' для выхода, 'conf-dump' для просмотра конфигурации" << endl << endl;
-        cout << "Доступные команды: ls, cd, cat, du, conf-dump, exit" << endl << endl;
+        cout << "Доступные команды: ls, cd, cat, du, chmod, touch, conf-dump, exit" << endl << endl;
 
         while (running) {
             //приглашение к вводу

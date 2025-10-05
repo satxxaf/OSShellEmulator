@@ -1,0 +1,15 @@
+conf-dump
+ls
+touch newfile.txt
+ls
+touch /home/user/new_doc.txt
+cd /home/user
+ls
+chmod 755 new_doc.txt
+ls
+chmod 644 document.txt
+ls
+touch existing.txt
+touch /var/new_log.txt
+cd /var
+ls
