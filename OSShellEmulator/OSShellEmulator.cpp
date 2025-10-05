@@ -44,6 +44,7 @@ public:
         addDirectory("/var");
         addDirectory("/var/log");
         addFile("/var/log/system.log", "Логи системы...");
+        addFile("/home/user/data.txt", "Это файл с данными пользователя для тестирования команды du");
 
         return true;
     }
@@ -165,6 +166,45 @@ public:
     string getCurrentPath() {
         //упрощенная реализация
         return current_dir == root ? "/" : "/current";
+    }
+
+    //НОВ.ФУН: вычисление размера файла/директории
+    int calculateSize(VFSNode* node) {
+        if (!node->is_directory) {
+            return node->content.length();
+        }
+
+        int total_size = 0;
+        for (const auto& child : node->children) {
+            total_size += calculateSize(child.second);
+        }
+        return total_size;
+    }
+
+    //НОВ.ФУН: команда du - показ размеров
+    void showDiskUsage(const string& path = "") {
+        VFSNode* target_node = current_dir;
+
+        if (!path.empty()) {
+            vector<string> parts = splitPath(path);
+            target_node = current_dir;
+
+            if (path[0] == '/') {
+                target_node = root;
+            }
+
+            for (const string& part : parts) {
+                if (target_node->children.find(part) == target_node->children.end()) {
+                    cout << "Ошибка: путь не найден" << endl;
+                    return;
+                }
+                target_node = target_node->children[part];
+            }
+        }
+
+        int size = calculateSize(target_node);
+        string name = target_node == root ? "/" : target_node->name;
+        cout << size << "\t" << name << (target_node->is_directory ? "/" : "") << endl;
     }
 };
 
@@ -309,6 +349,24 @@ private:
                         cout << endl;
                     }
                 }
+                //НОВАЯ КОМАНДА: du
+                else if (command == "du") {
+                    if (!vfs_path.empty()) {
+                        if (args.size() > 1) {
+                            vfs.showDiskUsage(args[1]);
+                        }
+                        else {
+                            vfs.showDiskUsage();
+                        }
+                    }
+                    else {
+                        cout << "Команда 'du' (заглушка) с аргументами: ";
+                        for (size_t i = 1; i < args.size(); i++) {
+                            cout << "[" << args[i] << "] ";
+                        }
+                        cout << endl;
+                    }
+                }
                 else if (command == "conf-dump") {
                     showConfig();
                 }
@@ -391,6 +449,24 @@ private:
                 cout << endl;
             }
         }
+        //НОВАЯ КОМАНДА: du
+        else if (command == "du") {
+            if (!vfs_path.empty()) {
+                if (args.size() > 1) {
+                    vfs.showDiskUsage(args[1]);
+                }
+                else {
+                    vfs.showDiskUsage();
+                }
+            }
+            else {
+                cout << "Команда 'du' (заглушка) с аргументами: ";
+                for (size_t i = 1; i < args.size(); i++) {
+                    cout << "[" << args[i] << "] ";
+                }
+                cout << endl;
+            }
+        }
         //НОВ.КОМ: вывод конфигурации
         else if (command == "conf-dump") {
             showConfig();
@@ -414,7 +490,7 @@ public:
                 return;
             }
 
-            // Вывод motd если есть
+            //вывод motd если есть
             string motd = vfs.getMotd();
             if (!motd.empty()) {
                 cout << "MOTD" << endl;
@@ -437,7 +513,7 @@ public:
         cout << "Эмулятор командной оболочки ОС" << endl;
         cout << "VFS: " << vfs_name << endl;
         cout << "Введите 'exit' для выхода, 'conf-dump' для просмотра конфигурации" << endl << endl;
-        cout << "Доступные команды: ls, cd, cat, conf-dump, exit" << endl << endl;
+        cout << "Доступные команды: ls, cd, cat, du, conf-dump, exit" << endl << endl;
 
         while (running) {
             //приглашение к вводу

@@ -1,0 +1,13 @@
+# Тестирование Этапа 4 - Основные команды
+conf-dump
+ls
+du
+du /home
+du /home/user
+cd /home/user
+ls
+du
+cat document.txt
+du document.txt
+cd /
+du /etc
